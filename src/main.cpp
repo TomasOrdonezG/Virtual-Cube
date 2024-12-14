@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <iostream>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -11,16 +12,14 @@
 #include "imgui/imgui_impl_opengl3.h"
 
 #include "cube.h"
+#include "window.h"
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
-void initImGui(GLFWwindow *window);
+Window gameWindow;
 
-void framebufferSizeCallback(GLFWwindow *window, int width, int height)
-{
-    glViewport(0, 0, width, height);
-}
+void initImGui(GLFWwindow *window);
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
@@ -36,6 +35,20 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
     }
 }
 
+void gameEvents()
+{
+    ImVec2 windowSize = ImGui::GetContentRegionAvail();
+    
+    // Resize Window, textures, etc
+    static ImVec2 lastWindowSize;
+    bool windowChangedSize = windowSize.x != lastWindowSize.x || windowSize.y != lastWindowSize.y;
+    if (windowChangedSize)
+    {
+        gameWindow.updateDimensions((int)windowSize.x, (int)windowSize.y);
+    }
+    lastWindowSize = windowSize;
+}
+
 int main(int argc, char **argv)
 {
     // Intialize GLFW
@@ -46,9 +59,8 @@ int main(int argc, char **argv)
     }
 
     // Create GLFW window
-    glm::ivec2 windowDimensions(WINDOW_WIDTH, WINDOW_HEIGHT);
     glfwWindowHint(GLFW_SAMPLES, 4);
-    GLFWwindow *window = glfwCreateWindow(windowDimensions.x, windowDimensions.y, "float", NULL, NULL);
+    GLFWwindow *window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "float", NULL, NULL);
     if (window == NULL)
     {
         fprintf(stderr, "Error: Failed to create GLFW window\n");
@@ -56,7 +68,6 @@ int main(int argc, char **argv)
     }
 
     // GLFW Window Settings
-    glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
     glfwSetKeyCallback(window, keyCallback);
     glfwMakeContextCurrent(window);
 
@@ -66,16 +77,17 @@ int main(int argc, char **argv)
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     initImGui(window);
+    gameWindow = Window(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     // Camera, projection, and view
     glm::vec3 cameraPos(0.0f, 2.0f, -2.0f);
     glm::vec3 cameraTarget(0.0f, 0.0f, 0.0f);
     glm::vec3 upVector(0.0f, 1.0f, 0.0f);
     glm::vec3 rotationAxis(0.0f, 1.0f, 0.0f);
-    float width = 1.0f, height = width * (float)WINDOW_HEIGHT / (float)WINDOW_WIDTH;
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, upVector);
 
     // Create cube and bind it to the window (so we can directly update the cube using keyboard interrupts)
@@ -83,6 +95,7 @@ int main(int argc, char **argv)
     glfwSetWindowUserPointer(window, &cube);
 
     float t = 0.0f;
+    glm::ivec2 lastFBOSize((int)gameWindow.width, (int)gameWindow.height);
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
@@ -92,8 +105,6 @@ int main(int argc, char **argv)
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
-        
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Calculate dt
         static float lastFrame = 0.0f;
@@ -101,15 +112,36 @@ int main(int argc, char **argv)
         float dt = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        // Cube logic
-        cube.perFrame(dt);
-        cube.render(projection*view);
+        // Get the size of the ImGui window
+        ImGui::SetNextWindowDockID(ImGui::GetID("DockSpace"), ImGuiCond_FirstUseEver);
+        ImGui::Begin("Cube");
+        {
+            gameEvents();
+
+            glBindFramebuffer(GL_FRAMEBUFFER, gameWindow.FBO);
+            glViewport(0, 0, gameWindow.width, gameWindow.height);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            // Cube logic
+            cube.perFrame(dt);
+            glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)(gameWindow.width) / (float)(gameWindow.height), 0.1f, 100.0f);
+            cube.render(projection*view);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            // Reset the viewport for the default framebuffer
+            int display_w, display_h;
+            glfwGetFramebufferSize(window, &display_w, &display_h);
+            glViewport(0, 0, display_w, display_h);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            
+            // Display FBO texture to ImGui window
+            ImGui::Image((ImTextureID)(intptr_t)gameWindow.texture, ImVec2(gameWindow.width, gameWindow.height), ImVec2(0, 1), ImVec2(1, 0));
+        }
+        ImGui::End();
 
         // Render
         ImGui::Render();
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         ImGuiIO& io = ImGui::GetIO();
@@ -154,4 +186,3 @@ void initImGui(GLFWwindow *window)
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 }
-
