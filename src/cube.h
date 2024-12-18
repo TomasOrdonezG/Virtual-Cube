@@ -41,11 +41,13 @@ private:  // Vertex and fragments shaders
 
 public:
 
-    float sideLength = 1.0f;
+    float sideLength;
 
     Face *faces[NUM_FACES];
 
-    Cube() : shader(vertexShaderSource, fragmentShaderSource)
+    Cube(float sideLength)
+        : shader(vertexShaderSource, fragmentShaderSource)
+        , sideLength(sideLength)
     {
         srand(time(NULL));
         

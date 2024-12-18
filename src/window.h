@@ -14,13 +14,15 @@ public:
     int width, height;
     double aspectRatio;
     GLuint texture, FBO, DRB;
+    void (*resizeCallbak)(int, int);
 
     Window () {}
 
-    Window(int width, int height)
+    Window(int width, int height, void (*resizeCallbak)(int, int))
         : width(width)
         , height(height)
         , aspectRatio(width / double(height))
+        , resizeCallbak(resizeCallbak)
     { initFBO(); }
 
     ~Window()
@@ -54,6 +56,9 @@ public:
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, DRB);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // Invoke the window resize callback function from parent class
+        resizeCallbak(newWidth, newHeight);
     }
 
 

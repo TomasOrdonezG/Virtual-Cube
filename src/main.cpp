@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <iostream>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -13,13 +12,23 @@
 
 #include "cube.h"
 #include "window.h"
+#include "gui.h"
+#include "camera.h"
 
-#define WINDOW_WIDTH 800
+#define WINDOW_WIDTH 1000
 #define WINDOW_HEIGHT 800
 
 Window gameWindow;
+Camera camera;
+// Cube cube;
+GUI cubeGUI;
 
 void initImGui(GLFWwindow *window);
+
+void windowResizeCallback(int newWidth, int newHeight)
+{
+    camera.onWindowResize(newWidth, newHeight);
+}
 
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
@@ -28,7 +37,7 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
         glfwSetWindowShouldClose(window, true);
     }
 
-    Cube *cube = static_cast<Cube *>(glfwGetWindowUserPointer(window));
+    Cube *cube = static_cast<Cube*>(glfwGetWindowUserPointer(window));
     if (cube && action == GLFW_PRESS)
     {
         cube->keyCallback(key);
@@ -81,18 +90,20 @@ int main(int argc, char **argv)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     initImGui(window);
-    gameWindow = Window(WINDOW_WIDTH, WINDOW_HEIGHT);
+    gameWindow = Window(WINDOW_WIDTH, WINDOW_HEIGHT, windowResizeCallback);
 
-    // Camera, projection, and view
+
+    // Camera
     glm::vec3 cameraPos(0.0f, 2.0f, -2.0f);
     glm::vec3 cameraTarget(0.0f, 0.0f, 0.0f);
-    glm::vec3 upVector(0.0f, 1.0f, 0.0f);
-    glm::vec3 rotationAxis(0.0f, 1.0f, 0.0f);
-    glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, upVector);
+    camera = Camera(cameraPos, cameraTarget, gameWindow.width, gameWindow.height);
 
     // Create cube and bind it to the window (so we can directly update the cube using keyboard interrupts)
-    Cube cube;
+    Cube cube(1.0f);
     glfwSetWindowUserPointer(window, &cube);
+
+    // Create GUI instance
+    cubeGUI = GUI(&cube, &camera);
 
     float t = 0.0f;
     glm::ivec2 lastFBOSize((int)gameWindow.width, (int)gameWindow.height);
@@ -105,6 +116,8 @@ int main(int argc, char **argv)
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
+
+        cubeGUI.show();
 
         // Calculate dt
         static float lastFrame = 0.0f;
@@ -124,8 +137,7 @@ int main(int argc, char **argv)
 
             // Cube logic
             cube.perFrame(dt);
-            glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)(gameWindow.width) / (float)(gameWindow.height), 0.1f, 100.0f);
-            cube.render(projection*view);
+            cube.render(camera.projectionView);
 
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
