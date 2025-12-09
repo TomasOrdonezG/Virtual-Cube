@@ -117,7 +117,7 @@ int main(int argc, char **argv)
         ImGui::NewFrame();
         ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
-        cubeGUI.show();
+        // cubeGUI.show();
 
         // Calculate dt
         static float lastFrame = 0.0f;
